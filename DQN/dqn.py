@@ -69,9 +69,9 @@ class DQNAgent:
         self.epsilon_decay = 0.00001
 
 
-    def select_action(self, state, eps, train=True):
+    def select_action(self, state, eps):
         self.dqn_net.eval()
-        if train is not True and random.random() > eps:
+        if random.random() > eps:
             state = torch.from_numpy(np.float32(state)).unsqueeze(0).to(device)
             act = self.dqn_net.act(state)
         else:

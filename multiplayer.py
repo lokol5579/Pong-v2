@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument("-start_episode_1", type=int, default=0)
     parser.add_argument("-start_episode_2", type=int, default=0)
 
-    parser.add_argument("-total_episode", type=int, default=1000)
+    parser.add_argument("-total_episode", type=int, default=400)
     parser.add_argument("-horizon", type=int, default=4)
     parser.add_argument("-player", type=int, default=1)
     parser.add_argument("-skip_frame", type=int, default=4)
@@ -317,13 +317,13 @@ def test(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=25
 
     while not done:
         # 右侧板
-        action_1 = agent_1.select_action(obs, eps=0.0, train=False)
+        action_1 = agent_1.select_action(obs, eps=0.0)
 
         # 左侧板
         if players == 2 and agent_2 is None:
             raise ValueError("agent_2 is None")
         if players == 2 and agent_2 is not None:
-            action_2 = agent_2.select_action(obs[:, :, ::-1].copy(), eps=0.0, train=False)
+            action_2 = agent_2.select_action(obs[:, :, ::-1].copy(), eps=0.0)
         else:
             action_2 = None
 
@@ -361,7 +361,7 @@ def main(args):
         CONFIG['model_dir'] = os.path.join(CONFIG['model_dir'], args.memo_1)
         CONFIG['video_dir'] = os.path.join(CONFIG['video_dir'], args.memo_1)
 
-    if not args.test_mode and args.memo_1 != 'test' and args.player != 2 and os.path.exists(os.path.join(CONFIG['model_dir'], args.memo_1)):
+    if not args.test_mode and args.memo_1 != 'test' and args.player != 2 and os.path.exists(CONFIG['model_dir']):
         raise ValueError("memo is already exists")
 
     if args.player == 1:
@@ -411,15 +411,16 @@ def main(args):
             else:
                 raise ValueError("video dir is already exists")
         else:
-            if os.path.exists(CONFIG['model_dir']):
-                raise ValueError("model dir is already exists")
-            else:
-                os.makedirs(CONFIG['model_dir'])
+            if args.memo_1 != 'test':
+                if os.path.exists(CONFIG['model_dir']):
+                    raise ValueError("model dir is already exists")
+                else:
+                    os.makedirs(CONFIG['model_dir'])
 
-            if os.path.exists(CONFIG['video_dir']):
-                raise ValueError("video dir is already exists")
-            else:
-                os.makedirs(CONFIG['video_dir'])
+                if os.path.exists(CONFIG['video_dir']):
+                    raise ValueError("video dir is already exists")
+                else:
+                    os.makedirs(CONFIG['video_dir'])
 
         # 训练agent
         train(agent_1, agent_2, players=args.player, skip_frame=args.skip_frame, horizon=args.horizon, max_steps=2500, total_episode=args.total_episode)

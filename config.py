@@ -1,7 +1,9 @@
 from DQN.dqn import DQNAgent
-from SAC.sac import SACAgent
+from DQN.dueling_dqn import DuelingDQNAgent
+# from SAC.sac import SACAgent
 
 AGENT = {
     'DQN': DQNAgent,
-    'SAC': SACAgent,
+    'DuelingDQN': DuelingDQNAgent,
+    # 'SAC': SACAgent,
 }
