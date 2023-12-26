@@ -1,5 +1,10 @@
 *.zip
-checkpoints
-videos
-pong.ipynb
-SAC
+*.pth
+*.mp4
+
+!checkpoints/DoubleDQN/*_checkpoint_330.pth
+!checkpoints/DQN/*_checkpoint_335.pth
+!checkpoints/DuelingDoubleDQN/*_checkpoint_364.pth
+!checkpoints/DuelingDQN/*_checkpoint_348.pth
+!checkpoints/MixTrain_DuelingDoubleDQN/*_checkpoint_1999.pth
+!videos/*/episode_1999.mp4
