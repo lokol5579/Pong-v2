@@ -42,7 +42,6 @@ class DuelingDQN(nn.Module):
 
         adv = self.fc_adv(val)
         
-        
         # Dueling DQN: combining value and advantage streams
         q_vals = val2 + (adv - adv.mean(dim=1, keepdim=True))
 

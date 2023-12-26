@@ -31,6 +31,8 @@ eps_list = []
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-test_mode", action="store_true", default=False)
+    parser.add_argument("-mix_train", action="store_true", default=False)
+    parser.add_argument("-mix_train_data", type=list, default=[])
 
     parser.add_argument("-memo_1", type=str, default='test')
     parser.add_argument("-memo_2", type=str, default='test')
@@ -79,6 +81,10 @@ class NSkipTool(Wrapper):
             if self.players == 2:
                 reward = reward[0]
             total_reward += reward
+
+            if self.players == 2 and (obs == 236).sum() < 12504:
+                self.env.step(2, 2)
+
             if done:
                 break
         max_frame = np.max(np.stack(self.obs_buffer), axis=0)
@@ -242,7 +248,9 @@ def plot_learning_curve(x, scores, epsilon, filename):
     plt.savefig(filename)
 
 
-def train(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2500, total_episode=1000):
+def train(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2500, start_episode=0, total_episode=1000, mix_train=False, data=[]):
+    global CONFIG
+
     env = wrap_env(skip_frame=skip_frame, players=players, horizon=horizon)
     env.reset()
 
@@ -251,12 +259,21 @@ def train(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2
     global eps_list
     best_avg_rew = -np.inf
     best_rew = -np.inf
-    steps = 0
 
-    for i in range(total_episode):
+    if mix_train:
+        steps = data[0]
+        best_avg_rew = data[1]
+        best_rew = data[2]
+    else:
+        steps = 0
+
+    for i in range(start_episode, total_episode):
         done = False
         total_rew = 0.0
         obs = env.reset()
+
+        if players == 2:
+            obs, _, _, _ = env.step(2, 2)
 
         while not done:
             # 更新epsilon
@@ -293,9 +310,13 @@ def train(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2
 
         if avg_total_rew > best_avg_rew:
             best_avg_rew = avg_total_rew
+            if not mix_train:
+                agent_1.save_model(i, CONFIG['model_dir'])
+            # if args.player == 2:
+            #     agent_2.save_model(i, CONFIG['model_dir'])
+        
+        if mix_train:
             agent_1.save_model(i, CONFIG['model_dir'])
-            if args.player == 2:
-                agent_2.save_model(i, CONFIG['model_dir'])
 
         print('episode: %d, total step = %d, total reward = %.2f, avg reward = %.6f, best reward = %.2f, best avg reward = %.6f, epsilon = %.6f' % (i, steps, total_rew, avg_total_rew, best_rew, best_avg_rew, eps))
 
@@ -303,9 +324,14 @@ def train(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2
             # 测试agent
             test(agent_1, agent_2, players=players, skip_frame=skip_frame, horizon=horizon, max_steps=max_steps, episode=i, env=env)
 
-    plot_learning_curve(steps_list, total_rews, eps_list, os.path.join(CONFIG['model_dir'], 'pong.png'))
+    if not mix_train:
+        plot_learning_curve(steps_list, total_rews, eps_list, os.path.join(CONFIG['model_dir'], 'pong.png'))
+    else:
+        return steps_list, total_rews, eps_list, [steps, best_avg_rew, best_rew]
 
 def test(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=2500, episode=0, env=None):
+    global CONFIG
+
     if env is None:
         env = wrap_env(skip_frame=skip_frame, players=players, horizon=horizon)
         env.reset()
@@ -314,6 +340,9 @@ def test(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=25
     steps = 0
     images = []
     obs = env.reset()
+
+    if players == 2:
+        obs, _, _, _ = env.step(2, 2)
 
     while not done:
         # 右侧板
@@ -352,7 +381,10 @@ def test(agent_1, agent_2=None, players=1, skip_frame=2, horizon=2, max_steps=25
     return info
 
 def main(args):
+    global CONFIG
     # 检查目录是否存在，如果不存在则创建，存在则停止运行，test_mode不需要创建
+    if args.mix_train:
+        CONFIG = args.config.copy()
 
     if args.player == 2 and not os.path.exists(os.path.join(CONFIG['model_dir'], args.memo_1)):
         raise ValueError("agent_2 model is not exists")
@@ -361,7 +393,7 @@ def main(args):
         CONFIG['model_dir'] = os.path.join(CONFIG['model_dir'], args.memo_1)
         CONFIG['video_dir'] = os.path.join(CONFIG['video_dir'], args.memo_1)
 
-    if not args.test_mode and args.memo_1 != 'test' and args.player != 2 and os.path.exists(CONFIG['model_dir']):
+    if not args.mix_train and not args.test_mode and args.memo_1 != 'test' and args.player != 2 and os.path.exists(CONFIG['model_dir']):
         raise ValueError("memo is already exists")
 
     if args.player == 1:
@@ -396,35 +428,51 @@ def main(args):
         print(info)
     else:
         if args.player == 2:
-            agent_1.load_model(args.start_episode_1, os.path.join(CONFIG['model_dir'], args.memo_1))
+            if args.mix_train:
+                agent_1.load_model(args.start_episode_1 - 1, os.path.join(CONFIG['model_dir'], args.memo_1))
+            else:
+                agent_1.load_model(args.start_episode_1, os.path.join(CONFIG['model_dir'], args.memo_1))
             agent_2.load_model(args.start_episode_2, os.path.join(CONFIG['model_dir'], args.memo_2))
 
-            CONFIG['model_dir'] = os.path.join(CONFIG['model_dir'], args.memo_1 + '_' + args.memo_2)
-            CONFIG['video_dir'] = os.path.join(CONFIG['video_dir'], args.memo_1 + '_' + args.memo_2)
+            if args.mix_train:
+                CONFIG['model_dir'] = os.path.join(CONFIG['model_dir'], args.memo_1)
+                CONFIG['video_dir'] = os.path.join(CONFIG['video_dir'], args.memo_1)
+            else:
+                CONFIG['model_dir'] = os.path.join(CONFIG['model_dir'], args.memo_1 + '_' + args.memo_2)
+                CONFIG['video_dir'] = os.path.join(CONFIG['video_dir'], args.memo_1 + '_' + args.memo_2)
 
             if not os.path.exists(CONFIG['model_dir']):
                 os.makedirs(CONFIG['model_dir'])
-            else:
+            elif not args.mix_train:
                 raise ValueError("model dir is already exists")
             if not os.path.exists(CONFIG['video_dir']):
                 os.makedirs(CONFIG['video_dir'])
-            else:
+            elif not args.mix_train:
                 raise ValueError("video dir is already exists")
         else:
             if args.memo_1 != 'test':
                 if os.path.exists(CONFIG['model_dir']):
-                    raise ValueError("model dir is already exists")
+                    if not args.mix_train:
+                        raise ValueError("model dir is already exists")
+                    elif args.mix_train and args.mix_train_data[0] != 0:
+                        agent_1.load_model(args.start_episode_1 - 1, CONFIG['model_dir'])
                 else:
                     os.makedirs(CONFIG['model_dir'])
 
                 if os.path.exists(CONFIG['video_dir']):
-                    raise ValueError("video dir is already exists")
+                    if not args.mix_train:
+                        raise ValueError("video dir is already exists")
                 else:
                     os.makedirs(CONFIG['video_dir'])
 
-        # 训练agent
-        train(agent_1, agent_2, players=args.player, skip_frame=args.skip_frame, horizon=args.horizon, max_steps=2500, total_episode=args.total_episode)
+        if args.mix_train:
+            agent_1.memory = args.memory
 
+        # 训练agent
+        steps_list, total_rews, eps_list, data = train(agent_1, agent_2, players=args.player, skip_frame=args.skip_frame, horizon=args.horizon, max_steps=2500, start_episode=args.start_episode_1, total_episode=args.total_episode, mix_train=args.mix_train, data=args.mix_train_data)
+
+        if args.mix_train:
+            return steps_list, total_rews, eps_list, data, agent_1.memory, 
 
 def int_handler(signum, frame):
     plot_learning_curve(steps_list, total_rews, eps_list, os.path.join(CONFIG['model_dir'], 'pong.png'))
